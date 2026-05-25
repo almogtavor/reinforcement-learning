@@ -83,8 +83,16 @@ def value_iteration(mdp, gamma, nIt):
         #     corresponding to the math above: V^{(it+1)} = T[V^{(it)}]
         #     ** numpy array of floats **
 
-        V = Vprev # REPLACE THIS LINE WITH YOUR CODE
-        pi = oldpi # REPLACE THIS LINE WITH YOUR CODE
+        # Q^{(it)}(s, a) = sum_{s'} P(s,a,s') [ R(s,a,s') + gamma * V^{(it)}(s') ]
+        Q = np.zeros((mdp.nS, mdp.nA))
+        for s in range(mdp.nS):
+            for a in range(mdp.nA):
+                Q[s, a] = sum(p * (r + gamma * Vprev[s_next])
+                              for (p, s_next, r) in mdp.P[s][a])
+        # Bellman backup: V^{(it+1)}(s) = max_a Q^{(it)}(s, a)
+        V = Q.max(axis=1)
+        # Greedy policy w.r.t. Vprev (np.argmax breaks ties to the lower index)
+        pi = Q.argmax(axis=1).astype(int)
 
         max_diff = np.abs(V - Vprev).max()
         nChgActions="N/A" if oldpi is None else (pi != oldpi).sum()
@@ -101,23 +109,34 @@ Vs_VI, pis_VI = value_iteration(mdp, gamma=GAMMA, nIt=20)
 # Your optimal actions are shown by arrows.
 # At the bottom, the value of the different states are plotted.
 
-for (V, pi) in zip(Vs_VI[:10], pis_VI[:10]):
-    plt.figure(figsize=(3,3))
-    plt.imshow(V.reshape(4,4), cmap='gray', interpolation='none', clim=(0,1))
-    ax = plt.gca()
+# (i) optimal policy at each iteration, drawn as one panel per iteration
+fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+a2uv = {0: (-1, 0), 1:(0, -1), 2:(1,0), 3:(0, 1)}
+for it, (V, pi) in enumerate(zip(Vs_VI[:10], pis_VI[:10])):
+    ax = axes.flat[it]
+    ax.imshow(V.reshape(4,4), cmap='gray', interpolation='none', clim=(0,1))
     ax.set_xticks(np.arange(4)-.5)
     ax.set_yticks(np.arange(4)-.5)
     ax.set_xticklabels([])
     ax.set_yticklabels([])
-    Y, X = np.mgrid[0:4, 0:4]
-    a2uv = {0: (-1, 0), 1:(0, -1), 2:(1,0), 3:(0, 1)}
+    ax.set_title("iter %d" % it)
     Pi = pi.reshape(4,4)
     for y in range(4):
         for x in range(4):
             a = Pi[y, x]
             u, v = a2uv[a]
-            plt.arrow(x, y,u*.3, -v*.3, color='m', head_width=0.1, head_length=0.1)
-            plt.text(x, y, str(env.desc[y,x].item().decode()),
+            ax.arrow(x, y,u*.3, -v*.3, color='m', head_width=0.1, head_length=0.1)
+            ax.text(x, y, str(env.desc[y,x].item().decode()),
                      color='g', size=12,  verticalalignment='center',
                      horizontalalignment='center', fontweight='bold')
-    plt.grid(color='b', lw=2, ls='-')
+    ax.grid(color='b', lw=2, ls='-')
+fig.suptitle("Value Iteration: optimal policy at each iteration")
+fig.savefig("vi_policies.png", dpi=120, bbox_inches="tight")
+
+# (ii) each state value as a function of iterations (one curve per state)
+plt.figure()
+plt.plot(np.array(Vs_VI))
+plt.xlabel("iteration")
+plt.ylabel("state value")
+plt.title("Value Iteration: state values vs iterations")
+plt.savefig("vi_values.png", dpi=120, bbox_inches="tight")

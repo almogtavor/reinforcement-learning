@@ -59,7 +59,17 @@ print("")
 
 def compute_vpi(pi, mdp, gamma):
     # use pi[state] to access the action that's prescribed by this policy
-    V = np.ones(mdp.nS) # REPLACE THIS LINE WITH YOUR CODE
+    # V^pi solves (I - gamma * P_pi) V^pi = R_pi, with
+    #   P_pi[s, s'] = P(s, pi(s), s')   and   R_pi[s] = sum_s' P(s,pi(s),s') R(s,pi(s),s')
+    nS = mdp.nS
+    P_pi = np.zeros((nS, nS))
+    R_pi = np.zeros(nS)
+    for s in range(nS):
+        a = pi[s]
+        for (p, s_next, r) in mdp.P[s][a]:
+            P_pi[s, s_next] += p
+            R_pi[s] += p * r
+    V = np.linalg.solve(np.eye(nS) - gamma * P_pi, R_pi)
     return V
 
 actual_val = compute_vpi(np.arange(16) % mdp.nA, mdp, gamma=GAMMA)
@@ -69,7 +79,12 @@ print("Policy Value: ", actual_val)
 # Programing Question No. 2, part 2 - implement where required.
 
 def compute_qpi(vpi, mdp, gamma):
-    Qpi = np.zeros([mdp.nS, mdp.nA]) # REPLACE THIS LINE WITH YOUR CODE
+    # Q^pi(s, a) = sum_{s'} P(s,a,s') [ R(s,a,s') + gamma * V^pi(s') ]
+    Qpi = np.zeros([mdp.nS, mdp.nA])
+    for s in range(mdp.nS):
+        for a in range(mdp.nA):
+            Qpi[s, a] = sum(p * (r + gamma * vpi[s_next])
+                            for (p, s_next, r) in mdp.P[s][a])
     return Qpi
 
 Qpi = compute_qpi(np.arange(mdp.nS), mdp, gamma=0.95)
@@ -87,8 +102,10 @@ def policy_iteration(mdp, gamma, nIt):
     print("Iteration | # chg actions | V[0]")
     print("----------+---------------+---------")
     for it in range(nIt):
-        # YOUR CODE HERE
-        # you need to compute qpi which is the state-action values for current pi
+        # policy evaluation: state values of the current policy
+        vpi = compute_vpi(pi_prev, mdp, gamma)
+        # policy improvement: state-action values, then greedy policy
+        qpi = compute_qpi(vpi, mdp, gamma)
         pi = qpi.argmax(axis=1)
         print("%4i      | %6i        | %6.5f"%(it, (pi != pi_prev).sum(), vpi[0]))
         Vs.append(vpi)
@@ -98,4 +115,8 @@ def policy_iteration(mdp, gamma, nIt):
 
 
 Vs_PI, pis_PI = policy_iteration(mdp, gamma=0.95, nIt=20)
-plt.plot(Vs_PI);
+plt.plot(Vs_PI)
+plt.xlabel("iteration")
+plt.ylabel("state value")
+plt.title("Policy Iteration: state values vs iterations")
+plt.savefig("pi_values.png", dpi=120, bbox_inches="tight")
